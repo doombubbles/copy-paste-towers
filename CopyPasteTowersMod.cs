@@ -23,7 +23,7 @@ namespace CopyPasteTowers;
 
 public class CopyPasteTowersMod : BloonsTD6Mod
 {
-    private static TowerModel clipboard;
+    private static TowerModel? clipboard;
     private static double cost;
     private static bool payForIt;
     private static bool justPastedTower;
