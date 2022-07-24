@@ -9,7 +9,3 @@ When you press Ctrl+C while selecting a tower you will copy it, showing you its 
 Then, pressing Ctrl+V will start the placement for a copy of it with the same upgrades, paying the full combined price.
 
 Helpful for doing paragon sacrifices.
-
-**Changelog**
-
-v1.0.0 Release
