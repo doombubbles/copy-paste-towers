@@ -1,4 +1,5 @@
 ﻿using System;
+using Assets.Scripts;
 using Assets.Scripts.Models.Towers;
 using Assets.Scripts.Simulation.SMath;
 using Assets.Scripts.Simulation.Towers;
@@ -25,13 +26,13 @@ public class CopyPasteTowersMod : BloonsTD6Mod
 {
     private static TowerModel? clipboard;
     private static double cost;
-    private static bool payForIt;
+    private static int payForIt;
     private static bool justPastedTower;
     private static bool lastCopyWasCut;
 
-    private static readonly ModSettingHotkey CopyHotkey = new ModSettingHotkey(KeyCode.C, HotkeyModifier.Ctrl);
-    private static readonly ModSettingHotkey PasteHotkey = new ModSettingHotkey(KeyCode.V, HotkeyModifier.Ctrl);
-    private static readonly ModSettingHotkey CutHotkey = new ModSettingHotkey(KeyCode.X, HotkeyModifier.Ctrl);
+    private static readonly ModSettingHotkey CopyHotkey = new(KeyCode.C, HotkeyModifier.Ctrl);
+    private static readonly ModSettingHotkey PasteHotkey = new(KeyCode.V, HotkeyModifier.Ctrl);
+    private static readonly ModSettingHotkey CutHotkey = new(KeyCode.X, HotkeyModifier.Ctrl);
 
     public override void OnUpdate()
     {
@@ -63,12 +64,13 @@ public class CopyPasteTowersMod : BloonsTD6Mod
             }
         }
 
-        if (PasteHotkey.JustPressed() || justPastedTower && PasteHotkey.IsPressed())
+        if (PasteHotkey.JustPressed() || justPastedTower && (PasteHotkey.IsPressed() || Input.GetKey(KeyCode.LeftShift)))
         {
             PasteTower();
         }
 
         justPastedTower = false;
+        if (--payForIt < 0) payForIt = 0;
     }
 
     private static void CopyTower(Tower tower)
@@ -78,7 +80,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
 
         cost = CalculateCost(clipboard);
 
-        var name = LocalizationManager.Instance.GetText(tower.towerModel.baseId);
+        var name = LocalizationManager.Instance.GetText(tower.towerModel.name);
         Game.instance.ShowMessage($"Copied {name}\n\nTotal Cost is ${(int) cost}");
     }
 
@@ -115,15 +117,12 @@ public class CopyPasteTowersMod : BloonsTD6Mod
         return total;
     }
 
-    private static double CalculateCost(Tower tower)
-    {
-        return CalculateCost(tower.towerModel, tower.Position);
-    }
+    private static double CalculateCost(Tower tower) => CalculateCost(tower.towerModel, tower.Position);
 
     private static void PasteTower()
     {
         var inputManager = InGame.instance.InputManager;
-        if (inputManager.inPlacementMode || InGame.instance.GetCash() < cost)
+        if (inputManager.IsInPlacementMode() || InGame.instance.GetCash() < cost)
         {
             return;
         }
@@ -132,36 +131,28 @@ public class CopyPasteTowersMod : BloonsTD6Mod
         {
             try
             {
-                payForIt = true;
+                payForIt = 30;
                 inputManager.CreatePlacementTower(pos);
-                justPastedTower = true;
             }
             catch (Exception e)
             {
                 ModHelper.Error<CopyPasteTowersMod>(e);
             }
-            finally
-            {
-                payForIt = false;
-            }
-        }));
-
-        if (Input.GetKey(KeyCode.LeftShift))
-        {
-            inputManager.TryPlace();
-        }
+        }), new ObjectId {data = (uint) InGame.instance.UnityToSimulation.GetInputId()});
     }
 
     [HarmonyPatch(typeof(TowerManager.TowerCreateDef), nameof(TowerManager.TowerCreateDef.Invoke))]
     internal class TowerManager_CreateTower
     {
-        [HarmonyPostfix]
-        internal static void Postfix(Tower tower)
+        [HarmonyPrefix]
+        internal static void Prefix(Tower tower)
         {
-            if (payForIt)
+            if (payForIt > 0)
             {
                 tower.worth = (float) CalculateCost(tower);
-                payForIt = false;
+                InGame.instance.AddCash(-tower.worth);
+                payForIt = 0;
+                justPastedTower = true;
 
                 if (lastCopyWasCut)
                 {
