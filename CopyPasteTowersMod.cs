@@ -1,7 +1,7 @@
 ﻿using System;
 using Assets.Scripts;
 using Assets.Scripts.Models.Towers;
-using Assets.Scripts.Simulation.SMath;
+using Assets.Scripts.Simulation.Input;
 using Assets.Scripts.Simulation.Towers;
 using Assets.Scripts.Unity;
 using Assets.Scripts.Unity.UI_New.InGame;
@@ -34,7 +34,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
     private static readonly ModSettingHotkey PasteHotkey = new(KeyCode.V, HotkeyModifier.Ctrl);
     private static readonly ModSettingHotkey CutHotkey = new(KeyCode.X, HotkeyModifier.Ctrl);
 
-    public override void OnUpdate()
+    public override void OnLateUpdate()
     {
         if (!InGame.instance)
         {
@@ -44,7 +44,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
         if (TowerSelectionMenu.instance)
         {
             var selectedTower = TowerSelectionMenu.instance.selectedTower;
-            if (selectedTower != null && !selectedTower.IsParagon && !selectedTower.tower.towerModel.IsHero())
+            if (selectedTower is { IsParagon: false } && !selectedTower.tower.towerModel.IsHero())
             {
                 lastCopyWasCut = CutHotkey.JustPressed();
                 if (CutHotkey.JustPressed() || CopyHotkey.JustPressed())
@@ -122,7 +122,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
     private static void PasteTower()
     {
         var inputManager = InGame.instance.InputManager;
-        if (inputManager.IsInPlacementMode() || InGame.instance.GetCash() < cost)
+        if (clipboard == null || inputManager.IsInPlacementMode() || InGame.instance.GetCash() < cost)
         {
             return;
         }
@@ -159,6 +159,19 @@ public class CopyPasteTowersMod : BloonsTD6Mod
                     var tts = tower.GetTowerToSim();
                     TowerSelectionMenu.instance.SelectTower(tts);
                 }
+            }
+        }
+    }
+
+    [HarmonyPatch(typeof(TowerInventory), nameof(TowerInventory.HasInventory))]
+    internal static class TowerInventory_HasInventory
+    {
+        [HarmonyPostfix]
+        private static void Postfix(TowerModel def, ref bool __result)
+        {
+            if (__result == false && def.name == clipboard?.name && ModHelper.HasMod("Unlimited5thTiers"))
+            {
+                __result = true;
             }
         }
     }

@@ -1,1 +1,2 @@
-- Fixed for BTD6 v32.0
+- Allow pasting of 5th tier towers if the Unlimited 5th Tiers mod is used
+- Improved the repeated pasting via holding the paste hotkey / holding shift after starting paste placement
