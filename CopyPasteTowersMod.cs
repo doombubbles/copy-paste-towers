@@ -1,21 +1,21 @@
 ﻿using System;
-using Assets.Scripts;
-using Assets.Scripts.Models.Towers;
-using Assets.Scripts.Simulation.Input;
-using Assets.Scripts.Simulation.Towers;
-using Assets.Scripts.Unity;
-using Assets.Scripts.Unity.UI_New.InGame;
-using Assets.Scripts.Unity.UI_New.InGame.TowerSelectionMenu;
+using Il2CppAssets.Scripts;
+using Il2CppAssets.Scripts.Models.Towers;
+using Il2CppAssets.Scripts.Simulation.Input;
+using Il2CppAssets.Scripts.Simulation.Towers;
+using Il2CppAssets.Scripts.Unity;
+using Il2CppAssets.Scripts.Unity.UI_New.InGame;
+using Il2CppAssets.Scripts.Unity.UI_New.InGame.TowerSelectionMenu;
 using BTD_Mod_Helper;
 using BTD_Mod_Helper.Api.ModOptions;
 using BTD_Mod_Helper.Extensions;
 using CopyPasteTowers;
 using HarmonyLib;
+using Il2CppNinjaKiwi.Common;
 using MelonLoader;
-using NinjaKiwi.Common;
 using UnityEngine;
 using Vector2 = UnityEngine.Vector2;
-using Vector3 = Assets.Scripts.Simulation.SMath.Vector3;
+using Vector3 = Il2CppAssets.Scripts.Simulation.SMath.Vector3;
 
 [assembly: MelonInfo(typeof(CopyPasteTowersMod), ModHelperData.Name, ModHelperData.Version, ModHelperData.RepoOwner)]
 [assembly: MelonGame("Ninja Kiwi", "BloonsTD6")]
@@ -141,30 +141,30 @@ public class CopyPasteTowersMod : BloonsTD6Mod
         }), new ObjectId {data = (uint) InGame.instance.UnityToSimulation.GetInputId()});
     }
 
-    [HarmonyPatch(typeof(TowerManager.TowerCreateDef), nameof(TowerManager.TowerCreateDef.Invoke))]
-    internal class TowerManager_CreateTower
+    [HarmonyPatch(typeof(Tower), nameof(Tower.OnPlace))]
+    internal static class Tower_OnPlace
     {
         [HarmonyPrefix]
-        internal static void Prefix(Tower tower)
+        private static void Prefix(Tower __instance)
         {
             if (payForIt > 0)
             {
-                tower.worth = (float) CalculateCost(tower);
-                InGame.instance.AddCash(-tower.worth);
+                __instance.worth = (float) CalculateCost(__instance);
+                InGame.instance.AddCash(-__instance.worth + __instance.towerModel.cost);
                 payForIt = 0;
                 justPastedTower = true;
 
                 if (lastCopyWasCut)
                 {
-                    var tts = tower.GetTowerToSim();
+                    var tts = __instance.GetTowerToSim();
                     TowerSelectionMenu.instance.SelectTower(tts);
                 }
             }
         }
     }
 
-    [HarmonyPatch(typeof(TowerInventory), nameof(TowerInventory.HasInventory))]
-    internal static class TowerInventory_HasInventory
+    [HarmonyPatch(typeof(TowerInventory), nameof(TowerInventory.HasUpgradeInventory))]
+    internal static class TowerInventory_HasUpgradeInventory
     {
         [HarmonyPostfix]
         private static void Postfix(TowerModel def, ref bool __result)
