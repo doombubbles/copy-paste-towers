@@ -122,7 +122,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
     private static void PasteTower()
     {
         var inputManager = InGame.instance.InputManager;
-        if (clipboard == null || inputManager.IsInPlacementMode() || InGame.instance.GetCash() < cost)
+        if (clipboard == null || inputManager.IsInPlacementMode || InGame.instance.GetCash() < cost)
         {
             return;
         }
