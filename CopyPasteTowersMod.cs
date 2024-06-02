@@ -29,6 +29,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
     private static int payForIt;
     private static bool justPastedTower;
     private static bool lastCopyWasCut;
+    private static TargetType? targetType;
 
     private static readonly ModSettingHotkey CopyHotkey = new(KeyCode.C, HotkeyModifier.Ctrl);
     private static readonly ModSettingHotkey PasteHotkey = new(KeyCode.V, HotkeyModifier.Ctrl);
@@ -64,7 +65,8 @@ public class CopyPasteTowersMod : BloonsTD6Mod
             }
         }
 
-        if (PasteHotkey.JustPressed() || justPastedTower && (PasteHotkey.IsPressed() || Input.GetKey(KeyCode.LeftShift)))
+        if (PasteHotkey.JustPressed() ||
+            justPastedTower && (PasteHotkey.IsPressed() || Input.GetKey(KeyCode.LeftShift)))
         {
             PasteTower();
         }
@@ -82,6 +84,8 @@ public class CopyPasteTowersMod : BloonsTD6Mod
 
         var name = LocalizationManager.Instance.GetText(tower.towerModel.name);
         Game.instance.ShowMessage($"Copied {name}\n\nTotal Cost is ${(int) cost}");
+
+        targetType = tower.TargetType;
     }
 
     private static double CalculateCost(TowerModel towerModel, Vector3 pos = default)
@@ -94,7 +98,8 @@ public class CopyPasteTowersMod : BloonsTD6Mod
         var discountMult = 0f;
         if (pos != default)
         {
-            var zoneDiscount = towerManager.GetZoneDiscount(pos, 0, 0);
+            var zoneDiscount =
+                towerManager.GetZoneDiscount(towerModel, pos, 0, 0, InGame.instance.bridge.MyPlayerNumber);
             discountMult = towerManager.GetDiscountMultiplier(zoneDiscount);
         }
 
@@ -107,7 +112,8 @@ public class CopyPasteTowersMod : BloonsTD6Mod
             discountMult = 0f;
             if (pos != default)
             {
-                var zoneDiscount = towerManager.GetZoneDiscount(pos, upgrade.path, upgrade.tier);
+                var zoneDiscount = towerManager.GetZoneDiscount(towerModel, pos, upgrade.path, upgrade.tier,
+                    InGame.instance.bridge.MyPlayerNumber);
                 discountMult = towerManager.GetDiscountMultiplier(zoneDiscount);
             }
 
@@ -138,7 +144,7 @@ public class CopyPasteTowersMod : BloonsTD6Mod
             {
                 ModHelper.Error<CopyPasteTowersMod>(e);
             }
-        }), new ObjectId {data = (uint) InGame.instance.UnityToSimulation.GetInputId()});
+        }), new ObjectId { data = (uint) InGame.instance.bridge.GetInputId() });
     }
 
     [HarmonyPatch(typeof(Tower), nameof(Tower.OnPlace))]
@@ -159,19 +165,11 @@ public class CopyPasteTowersMod : BloonsTD6Mod
                     var tts = __instance.GetTowerToSim();
                     TowerSelectionMenu.instance.SelectTower(tts);
                 }
-            }
-        }
-    }
 
-    [HarmonyPatch(typeof(TowerInventory), nameof(TowerInventory.HasUpgradeInventory))]
-    internal static class TowerInventory_HasUpgradeInventory
-    {
-        [HarmonyPostfix]
-        private static void Postfix(TowerModel def, ref bool __result)
-        {
-            if (__result == false && def.name == clipboard?.name && ModHelper.HasMod("Unlimited5thTiers"))
-            {
-                __result = true;
+                if (targetType != null)
+                {
+                    __instance.SetTargetType(targetType);
+                }
             }
         }
     }
