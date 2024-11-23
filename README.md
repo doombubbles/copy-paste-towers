@@ -1,4 +1,3 @@
-
 <h1 align="center">
 <a href="https://github.com/doombubbles/copy-paste-towers/releases/latest/download/CopyPasteTowers.dll">
     <img align="left" alt="Icon" height="90" src="Icon.png">
@@ -6,6 +5,7 @@
 </a>
 Copy/Paste Towers
 </h1>
+<br/>
 
 ## Note: The functionality of this mod is also included as part of [Useful Utilities](https://github.com/doombubbles/useful-utilities#readme)
 
