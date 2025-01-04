@@ -17,7 +17,6 @@ using Vector3 = Il2CppAssets.Scripts.Simulation.SMath.Vector3;
 namespace UsefulUtilities.Utilities;
 #else
 using static CopyPasteTowers.CopyPasteTowersMod;
-
 namespace CopyPasteTowers;
 #endif
 
@@ -45,17 +44,19 @@ public class CopyPasteTowersUtility
 
     public static void Update()
     {
-        if (!InGame.instance) return;
+        if (!InGame.instance || InGame.Bridge == null || InGame.Bridge.IsSpectatorMode) return;
 
         if (TowerSelectionMenu.instance)
         {
             var selectedTower = TowerSelectionMenu.instance.selectedTower;
-            if (selectedTower is { IsParagon: false } && !selectedTower.tower.towerModel.IsHero())
+            var tower = selectedTower?.Def;
+            if (tower is { isParagon: false, isSubTower: false } && !tower.IsHero() &&
+                tower.name.StartsWith(tower.baseId))
             {
                 lastCopyWasCut = CutTower.JustPressed();
                 if (CutTower.JustPressed() || CopyTower.JustPressed())
                 {
-                    Copy(selectedTower.tower);
+                    Copy(selectedTower!.tower);
 
                     if (CutTower.JustPressed())
                     {
