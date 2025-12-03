@@ -2,8 +2,8 @@
 
 public static class ModHelperData
 {
-    public const string WorksOnVersion = "46.0";
-    public const string Version = "1.0.8";
+    public const string WorksOnVersion = "52.0";
+    public const string Version = "1.0.9";
     public const string Name = "Copy/Paste Towers";
 
     public const string Description =
