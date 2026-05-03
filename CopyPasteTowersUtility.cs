@@ -13,7 +13,7 @@ using Il2CppAssets.Scripts.Simulation.Towers.Behaviors;
 using Il2CppAssets.Scripts.Unity;
 using Il2CppAssets.Scripts.Unity.UI_New.InGame;
 using Il2CppAssets.Scripts.Unity.UI_New.InGame.TowerSelectionMenu;
-using Il2CppNinjaKiwi.Common;
+using Il2CppNinjaKiwi.Localization;
 using UnityEngine;
 using Math = Il2CppAssets.Scripts.Simulation.SMath.Math;
 
@@ -41,11 +41,14 @@ public class CopyPasteTowersUtility
     protected override bool CreateCategory => true;
 
     public override void OnUpdate() => Update();
+
+    private static bool nextPlaceIsQueued;
 #endif
 
     private static TowerModel? clipboard;
+    private static double baseCost;
     private static double cost;
-    private static bool payForIt;
+    private static bool nextPlaceIsPaste;
     private static bool justPastedTower;
     private static bool lastCopyWasCut;
     private static TargetType? targetType;
@@ -75,8 +78,14 @@ public class CopyPasteTowersUtility
 
                     if (CutTower.JustPressed())
                     {
+#if USEFUL_UTILITIES
+                        QuickSell.blockQuickSell = true;
+#endif
                         TowerSelectionMenu.instance.Sell();
                         lastCopyWasCut = true;
+#if USEFUL_UTILITIES
+                        QuickSell.blockQuickSell = false;
+#endif
                     }
                     else
                     {
@@ -102,10 +111,12 @@ public class CopyPasteTowersUtility
 
     private static void Copy(Tower tower)
     {
-        cost = CalculateBaseCost(tower);
+        cost = CalculateCost(tower.towerModel) + ModifyClipboardCost(tower);
 
-        var inGameModel = InGame.instance.GetGameModel();
-        clipboard = inGameModel.GetTowerWithName(tower.towerModel.name);
+        clipboard = tower.towerModel;
+        var baseTower = InGame.instance.GetGameModel().GetTower(clipboard.baseId);
+
+        baseCost = baseTower.cost + ModifyClipboardCost(tower);
 
         foreach (var mod in ModHelper.Mods)
         {
@@ -113,7 +124,14 @@ public class CopyPasteTowersUtility
         }
 
         var name = LocalizationManager.Instance.GetText(tower.towerModel.name);
-        Game.instance.ShowMessage($"Copied {name}\n\nTotal Cost is ${(int) cost}");
+        var message = $"Copied {name}\n\nTotal Cost is ${(int) cost}";
+#if USEFUL_UTILITIES
+        if (!UpgradeQueueing.Off)
+        {
+            message += $" $({(int) baseCost} for queued)";
+        }
+#endif
+        Game.instance.ShowMessage(message);
 
         targetType = tower.TargetType;
         lastDegree = tower.towerModel.isParagon ? tower.entity.GetBehavior<ParagonTower>()?.investmentInfo : null;
@@ -122,25 +140,52 @@ public class CopyPasteTowersUtility
     private static void Paste()
     {
         var inputManager = InGame.instance.InputManager;
-        if (clipboard == null || inputManager.IsInPlacementMode || InGame.instance.GetCash() < cost)
+        if (clipboard == null || inputManager.IsInPlacementMode) return;
+
+#if USEFUL_UTILITIES
+        if (InGame.instance.GetCash() < cost)
         {
+            if (UpgradeQueueing.Off) return;
+            if (InGame.instance.GetCash() < baseCost) return;
+
+            var baseTower = InGame.Bridge.Model.GetTower(clipboard.baseId);
+            inputManager.EnterPlacementMode(baseTower, new Action<Vector2>(pos =>
+            {
+                try
+                {
+                    nextPlaceIsPaste = true;
+                    nextPlaceIsQueued = true;
+                    overrideNonPower = clipboard.isPowerProTower;
+                    inputManager.CreatePlacementTower(pos);
+                }
+                catch (Exception e)
+                {
+                    overrideNonPower = false;
+                    MelonLogger.Error(e);
+                }
+            }), new ObjectId { data = (uint) InGame.instance.bridge.GetInputId() });
+
             return;
         }
+#else
+        if (InGame.instance.GetCash() < cost) return;
+#endif
 
-        inputManager.EnterPlacementMode(clipboard, new Action<Vector2>(pos =>
-        {
-            try
+        inputManager.EnterPlacementMode(InGame.instance.GetGameModel().GetTowerWithName(clipboard.name),
+            new Action<Vector2>(pos =>
             {
-                payForIt = true;
-                overrideNonPower = clipboard.isPowerProTower;
-                inputManager.CreatePlacementTower(pos);
-            }
-            catch (Exception e)
-            {
-                overrideNonPower = false;
-                MelonLogger.Error(e);
-            }
-        }), new ObjectId { data = (uint) InGame.instance.bridge.GetInputId() });
+                try
+                {
+                    nextPlaceIsPaste = true;
+                    overrideNonPower = clipboard.isPowerProTower;
+                    inputManager.CreatePlacementTower(pos);
+                }
+                catch (Exception e)
+                {
+                    overrideNonPower = false;
+                    MelonLogger.Error(e);
+                }
+            }), new ObjectId { data = (uint) InGame.instance.bridge.GetInputId() });
     }
 
     private static int ModifyClipboardCost(Tower tower) =>
@@ -149,9 +194,8 @@ public class CopyPasteTowersUtility
     private static int BaseUpgradeCost(string name) =>
         Math.RoundToNearestInt(InGame.instance.GetGameModel().GetUpgrade(name).cost, 5);
 
-    private static double CalculateBaseCost(Tower tower) =>
-        tower.towerModel.appliedUpgrades.Aggregate(tower.towerModel.cost, (i, upgrade) => i + BaseUpgradeCost(upgrade))
-        + ModifyClipboardCost(tower);
+    private static double CalculateCost(TowerModel tower) =>
+        tower.appliedUpgrades.Aggregate(tower.cost, (i, upgrade) => i + BaseUpgradeCost(upgrade));
 
     private static int CalculateCost(Tower tower)
     {
@@ -206,16 +250,36 @@ public class CopyPasteTowersUtility
         private static void Prefix(Tower __instance)
         {
             overrideNonPower = false;
-            if (!payForIt) return;
-            payForIt = false;
+
+            var queued = false;
+
+#if USEFUL_UTILITIES
+            queued = nextPlaceIsQueued;
+            nextPlaceIsQueued = false;
+#endif
+
+            if (!nextPlaceIsPaste) return;
+            nextPlaceIsPaste = false;
 
             foreach (var mod in ModHelper.Mods)
             {
-                mod.Call("OnTowerPasted", __instance);
+                mod.Call("OnTowerPasted", __instance, queued);
             }
 
             __instance.worth = CalculateCost(__instance);
             InGame.instance.AddCash(-__instance.worth + __instance.towerModel.cost);
+
+#if USEFUL_UTILITIES
+            if (queued)
+            {
+                foreach (var upgradeModel in clipboard.GetAppliedUpgrades().OrderBy(model => model.tier)
+                             .ThenBy(model => model.path))
+                {
+                    UpgradeQueueing.EnqueueUpgrade(new(__instance.Id, upgradeModel.path, upgradeModel.tier + 1,
+                        upgradeModel.name));
+                }
+            }
+#endif
             justPastedTower = true;
 
             if (lastCopyWasCut)
@@ -237,6 +301,7 @@ public class CopyPasteTowersUtility
                 paragonTower.PlayParagonUpgradeSound();
                 paragonTower.Finish();
             }
+
         }
     }
 
